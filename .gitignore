@@ -3,3 +3,6 @@ nlpEnv/
 gensim-data/
 crawl-300d-2M-subword/
 *.zip
+*.model
+*.npy
+.venv/
