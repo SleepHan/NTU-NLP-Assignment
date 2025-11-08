@@ -151,3 +151,52 @@ def embed_prep(TEXT):
 #TBC: Include function to download fasttext model
 #TBC: Update function to unzip file automatically
 
+
+# ============================================================================
+# Helper function to process batches consistently
+# ============================================================================
+def process_batch(batch, debug=False):
+    """
+    Process a batch from BucketIterator, handling text transpose correctly.
+    Returns: text, text_lengths, labels (all properly formatted)
+    """
+    text, text_lengths = batch.text
+    labels = batch.label
+    
+    if debug:
+        print(f"DEBUG BATCH - text shape: {text.shape}, text_lengths shape: {text_lengths.shape}, labels shape: {labels.shape}")
+    
+    # torchtext BucketIterator returns text as [seq_len, batch_size] by default
+    # We need [batch_size, seq_len] for batch_first=True in the model
+    expected_batch_size = labels.shape[0]
+    
+    if text.dim() == 2:
+        if text.shape[1] == expected_batch_size and len(text_lengths) == expected_batch_size:
+            # text is [seq_len, batch_size], transpose to [batch_size, seq_len]
+            text = text.transpose(0, 1)
+            if debug:
+                print(f"DEBUG BATCH - Transposed text to [batch_size, seq_len]: {text.shape}")
+        elif text.shape[0] == expected_batch_size and len(text_lengths) == expected_batch_size:
+            # text is already [batch_size, seq_len]
+            if debug:
+                print(f"DEBUG BATCH - text already in correct format: {text.shape}")
+        else:
+            raise ValueError(
+                f"Cannot determine text format: text.shape={text.shape}, "
+                f"text_lengths.shape={text_lengths.shape}, labels.shape={labels.shape}"
+            )
+    
+    # Verify dimensions match
+    assert text.shape[0] == len(text_lengths) == labels.shape[0], \
+        f"Batch size mismatch: text.shape[0]={text.shape[0]}, len(text_lengths)={len(text_lengths)}, labels.shape[0]={labels.shape[0]}"
+    
+    return text, text_lengths, labels
+
+
+# Utility function for counting parameters
+def count_parameters(model):
+    """Count trainable parameters"""
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+
