@@ -8,3 +8,4 @@ crawl-300d-2M-subword/
 .venv/
 /__pycache__
 /weights
+*.pt
