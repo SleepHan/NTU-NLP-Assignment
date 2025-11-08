@@ -51,7 +51,7 @@ from sklearn.preprocessing import label_binarize
 import time, copy
 
 
-def data_prep():
+def data_prep(SEED = 42):
     ### Part 0: Dataset Preparation
 
     # For tokenization
@@ -60,7 +60,6 @@ def data_prep():
     # For multi - class classification labels
     LABEL = data.LabelField ()
 
-    SEED = 42
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
@@ -73,7 +72,7 @@ def data_prep():
         split_ratio=0.8,
         stratified=True,
         strata_field='label',
-        random_state= random.seed(42)
+        random_state= random.seed(SEED)
     )
     print(vars(train_data.examples[0]))
 
@@ -91,4 +90,4 @@ def data_prep():
     total_percentage = sum((count / total_examples) * 100 for count in label_counts.values())
     print(f"Total samples: {total_examples}, Sum of percentages: {total_percentage:.2f}%")
 
-    return train_data, validation_data, test_data
+    return train_data, validation_data, test_data, LABEL, TEXT
