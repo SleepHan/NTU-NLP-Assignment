@@ -199,4 +199,172 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+# Training function with history tracking for plotting curves
+def train_model_with_history(model, train_iterator, val_iterator, optimizer, criterion, 
+                             n_epochs, device, num_classes, patience=10, model_name="model"):
+    """
+    Train the model with early stopping and track training history.
+    Returns: model, training_history dictionary
+    """
+    best_val_acc = 0.0
+    best_val_f1 = 0.0
+    best_val_auc = 0.0
+    patience_counter = 0
+    best_model_state = None
+    
+    # History tracking
+    train_losses = []
+    val_losses = []
+    val_accs = []
+    val_f1s = []  # Add F1 tracking
+    val_aucs = []  # Add AUROC tracking
+    
+    print(f"\n>>> Training {model_name}")
+    print(f"    Parameters: {count_parameters(model):,}")
+    print(f"    Max epochs: {n_epochs}, Patience: {patience}")
+    
+    for epoch in range(n_epochs):
+        start_time = time.time()
+        
+        # Training phase
+        model.train()
+        train_loss = 0
+        train_preds = []
+        train_labels = []
+        
+        for batch in train_iterator:
+            text, text_lengths, labels = process_batch(batch, debug=False)
+            optimizer.zero_grad()
+            predictions = model(text, text_lengths)
+            loss = criterion(predictions, labels)
+            loss.backward()
+            optimizer.step()
+            
+            train_loss += loss.item()
+            preds = torch.argmax(predictions, dim=1)
+            train_preds.extend(preds.cpu().numpy())
+            train_labels.extend(labels.cpu().numpy())
+        
+        avg_train_loss = train_loss / len(train_iterator)
+        train_acc = accuracy_score(train_labels, train_preds)
+        
+        # Validation phase
+        model.eval()
+        val_loss = 0
+        val_preds = []
+        val_labels = []
+        val_probs = []  # Add probabilities for AUROC
+        
+        with torch.no_grad():
+            for batch in val_iterator:
+                text, text_lengths, labels = process_batch(batch, debug=False)
+                predictions = model(text, text_lengths)
+                loss = criterion(predictions, labels)
+                val_loss += loss.item()
+                
+                probs = torch.softmax(predictions, dim=1)  # Get probabilities
+                preds = torch.argmax(predictions, dim=1)
+                val_preds.extend(preds.cpu().numpy())
+                val_labels.extend(labels.cpu().numpy())
+                val_probs.extend(probs.cpu().numpy())  # Store probabilities
+        
+        avg_val_loss = val_loss / len(val_iterator)
+        val_acc = accuracy_score(val_labels, val_preds)
+        val_f1 = f1_score(val_labels, val_preds, average='weighted')  # Calculate F1
+        
+        # Calculate AUC-ROC
+        try:
+            val_probs_array = np.array(val_probs)
+            val_labels_bin = label_binarize(val_labels, classes=range(num_classes))
+            val_auc = roc_auc_score(val_labels_bin, val_probs_array, average='weighted', multi_class='ovr')
+        except Exception as e:
+            print(f"Warning: Could not calculate AUC-ROC for {model_name} at epoch {epoch+1}: {e}")
+            val_auc = 0.0
+        
+        # Store history
+        train_losses.append(avg_train_loss)
+        val_losses.append(avg_val_loss)
+        val_accs.append(val_acc)
+        val_f1s.append(val_f1)  # Store F1
+        val_aucs.append(val_auc)  # Store AUROC
+        
+        # Early stopping and model saving (using accuracy for early stopping)
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_val_f1 = val_f1
+            best_val_auc = val_auc
+            patience_counter = 0
+            best_model_state = model.state_dict().copy()
+        else:
+            patience_counter += 1
+        
+        end_time = time.time()
+        epoch_mins, epoch_secs = divmod(end_time - start_time, 60)
+        
+        print(f'Epoch: {epoch+1:02}/{n_epochs} | Time: {int(epoch_mins)}m {int(epoch_secs)}s')
+        print(f'\tTrain Loss: {avg_train_loss:.4f} | Train Acc: {train_acc*100:.2f}%')
+        print(f'\tVal Loss: {avg_val_loss:.4f} | Val Acc: {val_acc*100:.2f}% | Val F1: {val_f1:.4f} | Val AUC: {val_auc:.4f}')
+        
+        if patience_counter >= patience:
+            print(f'\t>>> Early stopping at epoch {epoch+1}, best val acc: {best_val_acc*100:.2f}%')
+            break
+    
+    # Load best model state
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+    
+    print(f'\n>>> Training completed! Best validation accuracy: {best_val_acc*100:.2f}%')
+    print(f'    Best validation F1: {best_val_f1:.4f}')
+    print(f'    Best validation AUC-ROC: {best_val_auc:.4f}')
+    
+    # Return history dictionary
+    history = {
+        'train_losses': train_losses,
+        'val_losses': val_losses,
+        'val_accs': val_accs,
+        'val_f1s': val_f1s,  # Add F1 history
+        'val_aucs': val_aucs,  # Add AUROC history
+        'best_val_acc': best_val_acc,
+        'best_val_f1': best_val_f1,  # Add best F1
+        'best_val_auc': best_val_auc,  # Add best AUROC
+        'epochs_trained': len(train_losses)
+    }
+    
+    return model, history
 
+
+def evaluate_model(model, iterator, criterion, device, model_name, num_classes):
+    """Evaluate model on test set and return metrics"""
+    model.eval()
+    test_loss = 0
+    test_preds = []
+    test_labels = []
+    test_probs = []
+    
+    with torch.no_grad():
+        for batch in iterator:
+            text, text_lengths, labels = process_batch(batch, debug=False)
+            predictions = model(text, text_lengths)
+            loss = criterion(predictions, labels)
+            test_loss += loss.item()
+            
+            probs = torch.softmax(predictions, dim=1)
+            preds = torch.argmax(predictions, dim=1)
+            test_preds.extend(preds.cpu().numpy())
+            test_labels.extend(labels.cpu().numpy())
+            test_probs.extend(probs.cpu().numpy())
+    
+    avg_test_loss = test_loss / len(iterator)
+    test_acc = accuracy_score(test_labels, test_preds)
+    test_f1 = f1_score(test_labels, test_preds, average='weighted')
+    
+    # Calculate AUC-ROC
+    try:
+        test_probs_array = np.array(test_probs)
+        test_labels_bin = label_binarize(test_labels, classes=range(num_classes))
+        test_auc = roc_auc_score(test_labels_bin, test_probs_array, average='weighted', multi_class='ovr')
+    except Exception as e:
+        print(f"Warning: Could not calculate AUC-ROC for {model_name}: {e}")
+        test_auc = 0.0
+    
+    return avg_test_loss, test_acc, test_f1, test_auc
