@@ -6,3 +6,5 @@ crawl-300d-2M-subword/
 *.model
 *.npy
 .venv/
+/__pycache__
+/weights
