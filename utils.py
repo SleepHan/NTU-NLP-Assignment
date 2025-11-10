@@ -199,9 +199,17 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+# Helper function for L1 regularization
+def compute_l1_loss(model, l1_lambda):
+    """Compute L1 regularization loss"""
+    if l1_lambda > 0:
+        return l1_lambda * sum(p.abs().sum() for p in model.parameters() if p.requires_grad)
+    return 0.0
+
+
 # Training function with history tracking for plotting curves
 def train_model_with_history(model, train_iterator, val_iterator, optimizer, criterion, 
-                             n_epochs, device, num_classes, patience=10, model_name="model"):
+                             n_epochs, device, num_classes, l1_lambda, patience=10, model_name="model"):
     """
     Train the model with early stopping and track training history.
     Returns: model, training_history dictionary
@@ -237,6 +245,7 @@ def train_model_with_history(model, train_iterator, val_iterator, optimizer, cri
             optimizer.zero_grad()
             predictions = model(text, text_lengths)
             loss = criterion(predictions, labels)
+            loss = loss + compute_l1_loss(model, l1_lambda)
             loss.backward()
             optimizer.step()
             
@@ -398,7 +407,7 @@ def process_batch_bert(batch, text_vocab, device, debug=False):
 
 # Modified training function for BERT
 def train_model_with_history_bert(model, train_iterator, val_iterator, optimizer, criterion, 
-                                   n_epochs, device, num_classes, patience=10, model_name="model", text_vocab=None):
+                                   n_epochs, device, num_classes, l1_lambda, patience=10, model_name="model", text_vocab=None):
     """
     Train the model with early stopping and track training history (BERT version)
     """
@@ -433,6 +442,7 @@ def train_model_with_history_bert(model, train_iterator, val_iterator, optimizer
             optimizer.zero_grad()
             predictions = model(text, text_lengths, text_vocab=text_vocab)
             loss = criterion(predictions, labels)
+            loss = loss + compute_l1_loss(model, l1_lambda)
             loss.backward()
             # Gradient clipping for BERT
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
