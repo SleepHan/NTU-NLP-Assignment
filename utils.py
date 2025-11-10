@@ -407,7 +407,7 @@ def process_batch_bert(batch, text_vocab, device, debug=False):
 
 # Modified training function for BERT
 def train_model_with_history_bert(model, train_iterator, val_iterator, optimizer, criterion, 
-                                   n_epochs, device, num_classes, patience=10, model_name="model", text_vocab=None):
+                                   n_epochs, device, num_classes, l1_lambda, patience=10, model_name="model", text_vocab=None):
     """
     Train the model with early stopping and track training history (BERT version)
     """
@@ -442,6 +442,7 @@ def train_model_with_history_bert(model, train_iterator, val_iterator, optimizer
             optimizer.zero_grad()
             predictions = model(text, text_lengths, text_vocab=text_vocab)
             loss = criterion(predictions, labels)
+            loss = loss + compute_l1_loss(model, l1_lambda)
             loss.backward()
             # Gradient clipping for BERT
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
