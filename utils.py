@@ -148,8 +148,25 @@ def embed_prep(TEXT):
     return fatter_embedding
 
 
-#TBC: Include function to download fasttext model
-#TBC: Update function to unzip file automatically
+def hyperparam_prep():
+    return {
+        'HIDDEN_DIM': 256,
+        'N_LAYERS': 2,
+        'DROPOUT': 0.5,
+        'BATCH_SIZE': 32,
+        'LEARNING_RATE': 0.0001,
+        'N_EPOCHS': 100,
+        'PATIENCE': 10,
+        'ATTENTION_DIM': 256,
+        'L1_LAMBDA': 1e-06,
+        'L2_LAMBDA': 1e-05,
+        'GRAD_CLIP': 0.0,
+        'OPTIMIZER': 'Adam',
+        'AGGREGATOR': 'mean',
+        'NUM_FILTERS': 100,
+        'FILTER_SIZES': [3, 4, 5],
+        
+    }
 
 
 # ============================================================================
